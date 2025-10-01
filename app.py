@@ -22,7 +22,34 @@ from huggingface_hub import hf_hub_download
 
 # ----------------- STREAMLIT CONFIG -----------------
 st.set_page_config(page_title="VisionExtract - Subject Isolation", layout="wide")
-st.title("VisionExtract — Subject Isolation (Streamlit demo)")
+
+# ----------------- HEADER -----------------
+st.markdown(
+    """
+    <div style="text-align: center; padding: 20px;">
+        <h1 style="color:#2E86C1;">VisionExtract — Subject Isolation</h1>
+        <p style="font-size:18px; color:#555;">
+            Upload an image and let our AI isolate the subject by removing the background.
+            Try the demo below to see how it works!
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ----------------- DEMO SECTION -----------------
+st.subheader("🔹 Demo Example")
+demo_col1, demo_col2 = st.columns(2)
+
+with demo_col1:
+    st.image("https://raw.githubusercontent.com/streamlit/example-data/main/demo-dog.jpg",
+             caption="Original Image", use_container_width=True)
+
+with demo_col2:
+    st.image("https://raw.githubusercontent.com/streamlit/example-data/main/demo-dog-mask.jpg",
+             caption="Isolated Subject (Demo)", use_container_width=True)
+
+st.markdown("---")
 
 # ----------------- MODEL LOADING -----------------
 @st.cache_resource
@@ -31,7 +58,7 @@ def load_model_from_hf(repo_id, filename, device):
     model_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
     model = smp.UnetPlusPlus(
-        encoder_name="efficientnet-b5",  # must match your training
+        encoder_name="efficientnet-b5",
         encoder_weights=None,
         in_channels=3,
         classes=1
@@ -63,7 +90,6 @@ def pad_image(pil_img):
 
 def predict_mask(model, pil_img, device, threshold=0.5):
     """Run model inference and return binary mask."""
-    model.eval()
     padded_img, orig_size = pad_image(pil_img)
     x = image_to_tensor(padded_img).to(device)
     with torch.no_grad():
@@ -86,46 +112,44 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-
-# 🔹 Replace with your Hugging Face repo id
-HF_REPO = "Abhiram1705/VisionAI"
+HF_REPO = "your-username/visionextract-model"
 MODEL_FILENAME = "unetpp_effb5.pth"
 
-# Load model (cached)
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
-col1, col2 = st.columns(2)
+st.subheader("🔹 Try it Yourself")
 
-with col1:
-    st.subheader("Upload Image")
-    img_file = st.file_uploader("Choose an image", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
 
-with col2:
-    if img_file:
-        img = Image.open(img_file).convert("RGB")
+if uploaded_file:
+    img = Image.open(uploaded_file).convert("RGB")
 
-        # ✅ resize large images for faster inference
-        MAX_SIZE = 512
-        if max(img.size) > MAX_SIZE:
-            img.thumbnail((MAX_SIZE, MAX_SIZE))
+    # Resize large images for faster inference
+    MAX_SIZE = 512
+    if max(img.size) > MAX_SIZE:
+        img.thumbnail((MAX_SIZE, MAX_SIZE))
 
-        st.image(img, caption="Original Image", width=350)
+    col1, col2 = st.columns(2)
 
-        if st.button("Run Inference"):
-            with st.spinner("Processing..."):
+    with col1:
+        st.image(img, caption="Uploaded Image", use_container_width=True)
+
+    with col2:
+        if st.button("✨ Run Inference"):
+            with st.spinner("Processing... Please wait..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
 
-                st.image(result, caption="Isolated Subject", width=350)
+                st.image(result, caption="Isolated Subject", use_container_width=True)
 
                 buf = io.BytesIO()
                 result.save(buf, format="PNG")
                 buf.seek(0)
                 st.download_button(
-                    "Download Result (PNG)",
+                    "⬇️ Download Result (PNG)",
                     data=buf,
                     file_name="subject_isolated.png",
                     mime="image/png"
                 )
-    else:
-        st.info("Upload an image to start.")
+else:
+    st.info("👆 Upload an image to get started!")
