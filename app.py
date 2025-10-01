@@ -7,6 +7,10 @@ Original file is located at
     https://colab.research.google.com/drive/1DuHHGYlCw5txt0ICTCFy8ZIo82N167sR
 """
 
+import warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+
 import streamlit as st
 import torch
 import segmentation_models_pytorch as smp
@@ -16,36 +20,40 @@ import numpy as np
 import io
 from huggingface_hub import hf_hub_download
 
+# ----------------- STREAMLIT CONFIG -----------------
 st.set_page_config(page_title="VisionExtract - Subject Isolation", layout="wide")
 st.title("VisionExtract — Subject Isolation (Streamlit demo)")
 
 # ----------------- MODEL LOADING -----------------
 @st.cache_resource
 def load_model_from_hf(repo_id, filename, device):
-    try:
-        model_path = hf_hub_download(repo_id=repo_id, filename=filename)
-        model = smp.UnetPlusPlus(
-            encoder_name="efficientnet-b5",
-            encoder_weights=None,
-            in_channels=3,
-            classes=1
-        )
-        state = torch.load(model_path, map_location=device)
-        model.load_state_dict(state)
-        model.eval().to(device)
-        return model
-    except Exception as e:
-        raise RuntimeError("Failed to load model: " + str(e))
+    """Download model from Hugging Face and load into memory (cached)."""
+    model_path = hf_hub_download(repo_id=repo_id, filename=filename)
+
+    model = smp.UnetPlusPlus(
+        encoder_name="efficientnet-b5",  # must match your training
+        encoder_weights=None,
+        in_channels=3,
+        classes=1
+    )
+    state = torch.load(model_path, map_location=device)
+    model.load_state_dict(state)
+    model.eval().to(device)
+    return model
 
 def image_to_tensor(pil_img, target_size=None):
     transforms = []
-    if target_size: transforms.append(T.Resize(target_size))
-    transforms.extend([T.ToTensor(),
-                       T.Normalize(mean=[0.485,0.456,0.406],
-                                   std=[0.229,0.224,0.225])])
+    if target_size:
+        transforms.append(T.Resize(target_size))
+    transforms.extend([
+        T.ToTensor(),
+        T.Normalize(mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225])
+    ])
     return T.Compose(transforms)(pil_img).unsqueeze(0)
 
 def pad_image(pil_img):
+    """Pad image so width and height are divisible by 32 (required by SMP)."""
     w, h = pil_img.size
     new_w = (w + 31) // 32 * 32
     new_h = (h + 31) // 32 * 32
@@ -54,6 +62,7 @@ def pad_image(pil_img):
     return result, (w, h)
 
 def predict_mask(model, pil_img, device, threshold=0.5):
+    """Run model inference and return binary mask."""
     model.eval()
     padded_img, orig_size = pad_image(pil_img)
     x = image_to_tensor(padded_img).to(device)
@@ -61,13 +70,14 @@ def predict_mask(model, pil_img, device, threshold=0.5):
         out = model(x)
     out = out.cpu()
     if out.shape[1] == 1:
-        mask = (torch.sigmoid(out)[0,0].numpy() > threshold).astype('uint8')*255
+        mask = (torch.sigmoid(out)[0, 0].numpy() > threshold).astype('uint8') * 255
     else:
-        mask = (out.argmax(1)[0].numpy() != 0).astype('uint8')*255
+        mask = (out.argmax(1)[0].numpy() != 0).astype('uint8') * 255
     mask = Image.fromarray(mask).convert("L").resize(orig_size, Image.NEAREST)
     return mask
 
 def apply_mask_to_image(pil_img, mask_pil):
+    """Apply binary mask on original image."""
     img_np = np.array(pil_img.convert("RGB"))
     m = np.array(mask_pil) > 127
     out = np.zeros_like(img_np)
@@ -75,32 +85,47 @@ def apply_mask_to_image(pil_img, mask_pil):
     return Image.fromarray(out)
 
 # ----------------- APP UI -----------------
-DEVICE = torch.device("cpu")  # Streamlit Community Cloud runs on CPU
+DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
 
-# Set to your Hugging Face repo id
-HF_REPO = "Abhiram1705/VisionAI"   # <<-- REPLACE with your HF username
+# 🔹 Replace with your Hugging Face repo id
+HF_REPO = "Abhiram1705/VisionAI"
 MODEL_FILENAME = "unetpp_effb5.pth"
 
+# Load model (cached)
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("Upload Image")
-    img_file = st.file_uploader("Choose an image", type=["png","jpg","jpeg"])
+    img_file = st.file_uploader("Choose an image", type=["png", "jpg", "jpeg"])
 
 with col2:
     if img_file:
         img = Image.open(img_file).convert("RGB")
+
+        # ✅ resize large images for faster inference
+        MAX_SIZE = 512
+        if max(img.size) > MAX_SIZE:
+            img.thumbnail((MAX_SIZE, MAX_SIZE))
+
         st.image(img, caption="Original Image", width=350)
+
         if st.button("Run Inference"):
             with st.spinner("Processing..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
+
                 st.image(result, caption="Isolated Subject", width=350)
+
                 buf = io.BytesIO()
-                result.save(buf, format="PNG"); buf.seek(0)
-                st.download_button("Download Result (PNG)",
-                                   data=buf, file_name="subject_isolated.png", mime="image/png")
+                result.save(buf, format="PNG")
+                buf.seek(0)
+                st.download_button(
+                    "Download Result (PNG)",
+                    data=buf,
+                    file_name="subject_isolated.png",
+                    mime="image/png"
+                )
     else:
         st.info("Upload an image to start.")
