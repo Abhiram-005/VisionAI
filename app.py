@@ -112,7 +112,7 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "your-username/visionextract-model"
+HF_REPO = "Abhiram1705/VisionAI"
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
