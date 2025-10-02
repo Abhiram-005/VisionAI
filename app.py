@@ -24,62 +24,68 @@ from huggingface_hub import hf_hub_download
 # ----------------- STREAMLIT CONFIG -----------------
 st.set_page_config(page_title="CutOut Pro - Smart Background Remover", layout="wide")
 
-# ----------------- HERO SECTION -----------------
+# ----------------- ANIMATED BACKGROUND -----------------
 st.markdown(
     """
-    <div style="text-align: center; padding: 30px;">
-        <h1 style="color:#1E90FF; font-size: 42px; margin-bottom: 10px;">
-            ✨ CutOut Pro — Smart Background Remover
-        </h1>
-        <p style="font-size:18px; color:#444; max-width:800px; margin:auto; line-height:1.6;">
+    <style>
+    /* Full-page animated gradient background */
+    body {
+        background: linear-gradient(-45deg, #000000, #111111, #222222, #000000);
+        background-size: 400% 400%;
+        animation: gradientBG 20s ease infinite;
+    }
+
+    @keyframes gradientBG {
+        0% {background-position: 0% 50%;}
+        50% {background-position: 100% 50%;}
+        100% {background-position: 0% 50%;}
+    }
+
+    .stApp {
+        background: transparent;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# ----------------- HEADER -----------------
+st.markdown(
+    """
+    <div style="text-align: center; padding: 20px;">
+        <h1 style="color:white;">CutOut Pro — Smart Background Remover</h1>
+        <p style="font-size:18px; color:#ddd; max-width:700px; margin:auto;">
             Transform your images effortlessly. <b>CutOut Pro</b> intelligently removes backgrounds,
-            isolating your subject with professional accuracy.
-            Upload your own image or try the demo below!
+            isolating your subject with professional precision.<br>
+            Upload your own image or explore the demo below.
         </p>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-st.markdown("---")
-
 # ----------------- DEMO SECTION -----------------
-st.markdown("## 🔹 Demo Preview")
-st.markdown(
-    """
-    <div style="text-align: center; margin-bottom: 20px; font-size:16px; color:#555;">
-        See how our AI instantly isolates subjects with pixel-perfect precision.
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.subheader("🔹 Demo Preview")
 
-st.markdown(
-    """
-    <div style="display: flex; justify-content: center; gap: 60px; margin-bottom: 50px;">
-        <div style="text-align: center;">
-            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png"
-                 alt="Original Demo"
-                 style="width:220px; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
-            <p style="margin-top:8px; font-size:14px; color:#444;">Original Image</p>
-        </div>
-        <div style="text-align: center;">
-            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png"
-                 alt="Isolated Subject"
-                 style="width:220px; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
-            <p style="margin-top:8px; font-size:14px; color:#444;">AI-Isolated Subject</p>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+demo_col1, demo_col2 = st.columns(2)
+
+with demo_col1:
+    st.image(
+        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png",
+        caption="Original Image", use_container_width=True
+    )
+
+with demo_col2:
+    st.image(
+        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png",
+        caption="AI-Isolated Subject", use_container_width=True
+    )
 
 st.markdown("---")
 
 # ----------------- MODEL LOADING -----------------
 @st.cache_resource
 def load_model_from_hf(repo_id, filename, device):
-    """Download model from Hugging Face and load into memory (cached)."""
     model_path = hf_hub_download(repo_id=repo_id, filename=filename)
 
     model = smp.UnetPlusPlus(
@@ -105,7 +111,6 @@ def image_to_tensor(pil_img, target_size=None):
     return T.Compose(transforms)(pil_img).unsqueeze(0)
 
 def pad_image(pil_img):
-    """Pad image so width and height are divisible by 32 (required by SMP)."""
     w, h = pil_img.size
     new_w = (w + 31) // 32 * 32
     new_h = (h + 31) // 32 * 32
@@ -114,7 +119,6 @@ def pad_image(pil_img):
     return result, (w, h)
 
 def predict_mask(model, pil_img, device, threshold=0.5):
-    """Run model inference and return binary mask."""
     padded_img, orig_size = pad_image(pil_img)
     x = image_to_tensor(padded_img).to(device)
     with torch.no_grad():
@@ -127,35 +131,59 @@ def predict_mask(model, pil_img, device, threshold=0.5):
     mask = Image.fromarray(mask).convert("L").resize(orig_size, Image.NEAREST)
     return mask
 
-def apply_mask_to_image(pil_img, mask_pil):
-    """Apply binary mask on original image."""
-    img_np = np.array(pil_img.convert("RGB"))
-    m = np.array(mask_pil) > 127
-    out = np.zeros_like(img_np)
-    out[m] = img_np[m]
-    return Image.fromarray(out)
+def apply_mask_with_background(pil_img, mask_pil, bg_type="black"):
+    """Apply mask with different background options."""
+    img_np = np.array(pil_img.convert("RGBA"))
+    mask = np.array(mask_pil) > 127
+
+    if bg_type == "transparent":
+        out = np.zeros_like(img_np)
+        out[..., :3] = img_np[..., :3]
+        out[..., 3] = mask.astype(np.uint8) * 255
+        return Image.fromarray(out)
+
+    elif bg_type == "subject_only":
+        out = np.zeros_like(img_np)
+        out[mask] = img_np[mask]
+        return Image.fromarray(out)
+
+    else:
+        # Choose background color
+        if bg_type == "black":
+            bg_color = (0, 0, 0)
+        elif bg_type == "white":
+            bg_color = (255, 255, 255)
+        elif bg_type == "blue":
+            bg_color = (0, 0, 255)
+        elif bg_type == "green":
+            bg_color = (0, 255, 0)
+        else:
+            bg_color = (0, 0, 0)
+
+        out = np.zeros_like(img_np[..., :3])
+        out[:, :] = bg_color
+        out[mask] = img_np[mask, :3]
+        return Image.fromarray(out)
 
 # ----------------- APP UI -----------------
-DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
+DEVICE = torch.device("cpu")
+HF_REPO = "Abhiram1705/VisionAI"   # 🔹 change this
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
-# ----------------- UPLOAD SECTION -----------------
-st.markdown("## 📤 Try It Yourself")
+st.subheader("🔹 Upload Your Image")
 
-uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Choose a file (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
 
-    # Resize large images for faster inference
     MAX_SIZE = 512
     if max(img.size) > MAX_SIZE:
         img.thumbnail((MAX_SIZE, MAX_SIZE))
 
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns(2)
 
     with col1:
         st.image(img, caption="Uploaded Image", use_container_width=True)
@@ -165,17 +193,31 @@ if uploaded_file:
         if run_button:
             with st.spinner("Processing... Please wait..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
-                result = apply_mask_to_image(img, mask)
 
-                st.image(result, caption="Background Removed", use_container_width=True)
+                # ✅ Default = black background
+                result = apply_mask_with_background(img, mask, bg_type="black")
+
+                st.image(result, caption="Processed Output", use_container_width=True)
+
+                # ✅ Background selection
+                bg_option = st.selectbox(
+                    "Choose Background:",
+                    ["black", "white", "blue", "green", "transparent", "subject_only"]
+                )
+
+                final_img = apply_mask_with_background(img, mask, bg_type=bg_option)
 
                 buf = io.BytesIO()
-                result.save(buf, format="PNG")
+                if bg_option == "transparent":
+                    final_img.save(buf, format="PNG")
+                else:
+                    final_img.save(buf, format="PNG")
                 buf.seek(0)
+
                 st.download_button(
-                    "⬇ Download Processed Image",
+                    "⬇ Download Result",
                     data=buf,
-                    file_name="cutout_result.png",
+                    file_name=f"cutout_{bg_option}.png",
                     mime="image/png",
                     use_container_width=True
                 )
