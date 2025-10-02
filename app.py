@@ -21,16 +21,17 @@ import io
 from huggingface_hub import hf_hub_download
 
 # ----------------- STREAMLIT CONFIG -----------------
-st.set_page_config(page_title="VisionExtract - Subject Isolation", layout="wide")
+st.set_page_config(page_title="VisionExtract - AI Subject Isolation", layout="wide")
 
 # ----------------- HEADER -----------------
 st.markdown(
     """
     <div style="text-align: center; padding: 20px;">
-        <h1 style="color:#2E86C1;">VisionExtract — Subject Isolation</h1>
-        <p style="font-size:18px; color:#555;">
-            Upload an image and let our AI isolate the subject by removing the background.
-            Try the demo below to see how it works!
+        <h1 style="color:#2E86C1;">VisionExtract — AI-Powered Subject Isolation</h1>
+        <p style="font-size:18px; color:#444; max-width:700px; margin:auto;">
+            Automatically remove image backgrounds and isolate the main subject
+            using state-of-the-art deep learning.
+            Upload your own image or check out the demo below.
         </p>
     </div>
     """,
@@ -38,14 +39,21 @@ st.markdown(
 )
 
 # ----------------- DEMO SECTION -----------------
-st.subheader("🔹 Demo Example")
+st.subheader("🔹 Demo Preview")
+
 demo_col1, demo_col2 = st.columns(2)
 
 with demo_col1:
-    st.image("demo_input.jpg", caption="Original Image", use_container_width=True)
+    st.image(
+        "https://raw.githubusercontent.com/<your-username>/<repo-name>/main/demo_input.jpg",
+        caption="Original Image", use_container_width=True
+    )
 
 with demo_col2:
-    st.image("demo_output.png", caption="Isolated Subject (Demo)", use_container_width=True)
+    st.image(
+        "https://raw.githubusercontent.com/<your-username>/<repo-name>/main/demo_output.png",
+        caption="AI-Isolated Subject", use_container_width=True
+    )
 
 st.markdown("---")
 
@@ -110,14 +118,14 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "your-username/visionextract-model"   # 🔹 change this
+HF_REPO = "Abhiram1705/VisionAI"   # 🔹 change this
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
-st.subheader("🔹 Try it Yourself")
+st.subheader("🔹 Upload Your Image")
 
-uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Choose a file (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
@@ -131,8 +139,8 @@ if uploaded_file:
 
     with col1:
         st.image(img, caption="Uploaded Image", use_container_width=True)
-        # ✅ Button is directly below the original image
-        run_button = st.button("✨ Run Inference")
+        # ✅ Button now below the uploaded image
+        run_button = st.button("🚀 Run AI Inference", use_container_width=True)
 
     with col2:
         if run_button:
@@ -146,10 +154,11 @@ if uploaded_file:
                 result.save(buf, format="PNG")
                 buf.seek(0)
                 st.download_button(
-                    "⬇️ Download Result (PNG)",
+                    "⬇ Download Isolated Subject",
                     data=buf,
                     file_name="subject_isolated.png",
-                    mime="image/png"
+                    mime="image/png",
+                    use_container_width=True
                 )
 else:
     st.info("👆 Upload an image to get started!")
