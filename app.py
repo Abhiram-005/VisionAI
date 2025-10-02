@@ -42,12 +42,10 @@ st.subheader("🔹 Demo Example")
 demo_col1, demo_col2 = st.columns(2)
 
 with demo_col1:
-    st.image("https://raw.githubusercontent.com/streamlit/example-data/main/demo-dog.jpg",
-             caption="Original Image", use_container_width=True)
+    st.image("demo_input.jpg", caption="Original Image", use_container_width=True)
 
 with demo_col2:
-    st.image("https://raw.githubusercontent.com/streamlit/example-data/main/demo-dog-mask.jpg",
-             caption="Isolated Subject (Demo)", use_container_width=True)
+    st.image("demo_output.png", caption="Isolated Subject (Demo)", use_container_width=True)
 
 st.markdown("---")
 
@@ -112,7 +110,7 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"
+HF_REPO = "your-username/visionextract-model"   # 🔹 change this
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
@@ -133,9 +131,11 @@ if uploaded_file:
 
     with col1:
         st.image(img, caption="Uploaded Image", use_container_width=True)
+        # ✅ Button is directly below the original image
+        run_button = st.button("✨ Run Inference")
 
     with col2:
-        if st.button("✨ Run Inference"):
+        if run_button:
             with st.spinner("Processing... Please wait..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
