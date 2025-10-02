@@ -7,10 +7,6 @@ Original file is located at
     https://colab.research.google.com/drive/1DuHHGYlCw5txt0ICTCFy8ZIo82N167sR
 """
 
-import warnings
-warnings.filterwarnings("ignore", category=SyntaxWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-
 import streamlit as st
 import torch
 import segmentation_models_pytorch as smp
@@ -20,74 +16,45 @@ import numpy as np
 import io
 from huggingface_hub import hf_hub_download
 
-# ----------------- STREAMLIT CONFIG -----------------
-st.set_page_config(page_title="CutOut Pro - Smart Background Remover", layout="wide")
+# ----------------- PAGE CONFIG -----------------
+st.set_page_config(page_title="CutOut Pro — Smart Background Remover", layout="wide")
+st.title("✨ CutOut Pro — Smart Background Remover")
 
-# ----------------- HEADER -----------------
 st.markdown(
     """
-    <div style="text-align: center; padding: 20px;">
-        <h1 style="color:#2E86C1;">CutOut Pro — Smart Background Remover</h1>
-        <p style="font-size:18px; color:#444; max-width:700px; margin:auto;">
-            Transform your images effortlessly. CutOut Pro intelligently removes backgrounds,
-            isolating your subject with professional accuracy.
-            Upload an image and let AI do the rest.
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True
+    Transform your images effortlessly. **CutOut Pro** intelligently removes backgrounds,
+    isolating your subject with professional accuracy.
+    Upload your own image or try the demo below!
+    """
 )
-
-# ----------------- DEMO SECTION -----------------
-st.subheader("🔹 Demo Preview")
-
-demo_col1, demo_col2 = st.columns(2)
-
-with demo_col1:
-    st.image(
-        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png",
-        caption="Original Image", use_container_width=True,width=100
-    )
-
-with demo_col2:
-    st.image(
-        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png",
-        caption="AI-Isolated Subject", use_container_width=True,width=100
-    )
-
-
-st.markdown("---")
 
 # ----------------- MODEL LOADING -----------------
 @st.cache_resource
 def load_model_from_hf(repo_id, filename, device):
-    """Download model from Hugging Face and load into memory (cached)."""
-    model_path = hf_hub_download(repo_id=repo_id, filename=filename)
-
-    model = smp.UnetPlusPlus(
-        encoder_name="efficientnet-b5",
-        encoder_weights=None,
-        in_channels=3,
-        classes=1
-    )
-    state = torch.load(model_path, map_location=device)
-    model.load_state_dict(state)
-    model.eval().to(device)
-    return model
+    try:
+        model_path = hf_hub_download(repo_id=repo_id, filename=filename)
+        model = smp.UnetPlusPlus(
+            encoder_name="efficientnet-b5",
+            encoder_weights=None,
+            in_channels=3,
+            classes=1
+        )
+        state = torch.load(model_path, map_location=device)
+        model.load_state_dict(state)
+        model.eval().to(device)
+        return model
+    except Exception as e:
+        raise RuntimeError("Failed to load model: " + str(e))
 
 def image_to_tensor(pil_img, target_size=None):
     transforms = []
-    if target_size:
-        transforms.append(T.Resize(target_size))
-    transforms.extend([
-        T.ToTensor(),
-        T.Normalize(mean=[0.485, 0.456, 0.406],
-                    std=[0.229, 0.224, 0.225])
-    ])
+    if target_size: transforms.append(T.Resize(target_size))
+    transforms.extend([T.ToTensor(),
+                       T.Normalize(mean=[0.485,0.456,0.406],
+                                   std=[0.229,0.224,0.225])])
     return T.Compose(transforms)(pil_img).unsqueeze(0)
 
 def pad_image(pil_img):
-    """Pad image so width and height are divisible by 32 (required by SMP)."""
     w, h = pil_img.size
     new_w = (w + 31) // 32 * 32
     new_h = (h + 31) // 32 * 32
@@ -96,70 +63,74 @@ def pad_image(pil_img):
     return result, (w, h)
 
 def predict_mask(model, pil_img, device, threshold=0.5):
-    """Run model inference and return binary mask."""
+    model.eval()
     padded_img, orig_size = pad_image(pil_img)
     x = image_to_tensor(padded_img).to(device)
     with torch.no_grad():
         out = model(x)
     out = out.cpu()
     if out.shape[1] == 1:
-        mask = (torch.sigmoid(out)[0, 0].numpy() > threshold).astype('uint8') * 255
+        mask = (torch.sigmoid(out)[0,0].numpy() > threshold).astype('uint8')*255
     else:
-        mask = (out.argmax(1)[0].numpy() != 0).astype('uint8') * 255
+        mask = (out.argmax(1)[0].numpy() != 0).astype('uint8')*255
     mask = Image.fromarray(mask).convert("L").resize(orig_size, Image.NEAREST)
     return mask
 
 def apply_mask_to_image(pil_img, mask_pil):
-    """Apply binary mask on original image."""
     img_np = np.array(pil_img.convert("RGB"))
     m = np.array(mask_pil) > 127
     out = np.zeros_like(img_np)
     out[m] = img_np[m]
     return Image.fromarray(out)
 
-# ----------------- APP UI -----------------
-DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 change this
-MODEL_FILENAME = "unetpp_effb5.pth"
+# ----------------- SETTINGS -----------------
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+HF_REPO = "your-hf-username/your-model-repo"   # 🔹 Replace with your Hugging Face repo
+MODEL_FILENAME = "unetpp_effb5.pth"            # 🔹 Replace with your model filename
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
-st.subheader("🔹 Upload Your Image")
+# ----------------- DEMO SECTION -----------------
+st.markdown("## 🔹 Demo Preview")
 
-uploaded_file = st.file_uploader("Choose a file (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+st.markdown(
+    """
+    <div style="display: flex; gap: 60px; justify-content: center; margin-top: 20px; margin-bottom: 30px;">
+        <div>
+            <img src="demo/demo_original.jpg" alt="Original Demo" width="220">
+            <p style="text-align:center; font-size:14px;">Original Image (Demo)</p>
+        </div>
+        <div>
+            <img src="demo/demo_isolated.jpg" alt="Isolated Demo" width="220">
+            <p style="text-align:center; font-size:14px;">Isolated Subject (Demo)</p>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")
+# ----------------- USER UPLOAD SECTION -----------------
+st.markdown("## 📤 Try It Yourself")
 
-    # Resize large images for faster inference
-    MAX_SIZE = 512
-    if max(img.size) > MAX_SIZE:
-        img.thumbnail((MAX_SIZE, MAX_SIZE))
+col1, col2 = st.columns([1,1])
 
-    col1, col2 = st.columns(2)
+with col1:
+    st.subheader("Upload Image")
+    img_file = st.file_uploader("Choose an image", type=["png","jpg","jpeg"])
+    run_inference = st.button("Remove the Background")
 
-    with col1:
-        st.image(img, caption="Uploaded Image", use_container_width=True)
-        # ✅ Button now directly below the uploaded image
-        run_button = st.button("🚀 Run Background Removal", use_container_width=True)
-
-    with col2:
-        if run_button:
-            with st.spinner("Processing... Please wait..."):
+with col2:
+    if img_file:
+        img = Image.open(img_file).convert("RGB")
+        st.image(img, caption="Original Image", width=350)
+        if run_inference:
+            with st.spinner("Processing..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
-
-                st.image(result, caption="Isolated Subject", use_container_width=True)
-
+                st.image(result, caption="Background Removed", width=350)
                 buf = io.BytesIO()
-                result.save(buf, format="PNG")
-                buf.seek(0)
-                st.download_button(
-                    "⬇ Download Processed Image",
-                    data=buf,
-                    file_name="cutout_result.png",
-                    mime="image/png",
-                    use_container_width=True
-                )
-else:
-    st.info("👆 Upload an image to get started!")
+                result.save(buf, format="PNG"); buf.seek(0)
+                st.download_button("⬇️ Download Result (PNG)",
+                                   data=buf, file_name="cutout_result.png", mime="image/png")
+    else:
+        st.info("Upload an image to get started.")
