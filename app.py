@@ -35,9 +35,6 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-        /* General page style */
-        body {background-color: #f9fbfd;}
-
         /* Buttons */
         .stButton>button {
             background: linear-gradient(90deg, #1E90FF, #00BFFF);
@@ -54,13 +51,11 @@ st.markdown(
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        /* Center titles */
-        h1, h2, h3, h4 {
+        h1, h2, h3 {
             text-align: center;
             font-family: 'Segoe UI', sans-serif;
         }
 
-        /* Image shadow */
         img {
             border-radius: 12px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
@@ -77,7 +72,8 @@ def load_lottieurl(url: str):
         return None
     return r.json()
 
-ai_animation = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_m9lczp.json")
+# ✅ Working animation link
+ai_animation = load_lottieurl("https://lottie.host/4e40d6a4-b5df-46c1-9cb0-1a56e7ea73a3/3Ck8JY.json")
 
 # ----------------- HERO SECTION -----------------
 st.markdown(
@@ -189,7 +185,7 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your HF repo
+HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
@@ -216,16 +212,6 @@ if uploaded_file:
             with st.spinner("⚡ AI is working... Please wait..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
-
-                # Fade-in effect
-                st.markdown(
-                    """
-                    <div style="animation: fadeIn 1s;">
-                        <style>@keyframes fadeIn {from {opacity:0;} to {opacity:1;}}</style>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
 
                 st.image(result, caption="Background Removed", use_container_width=True)
 
