@@ -33,7 +33,7 @@ st.markdown(
         </h1>
         <p style="font-size:18px; color:#444; max-width:800px; margin:auto; line-height:1.6;">
             Transform your images effortlessly. <b>CutOut Pro</b> intelligently removes backgrounds,
-            isolating your subject with professional accuracy.<br>
+            isolating your subject with professional accuracy.
             Upload your own image or try the demo below!
         </p>
     </div>
@@ -127,34 +127,12 @@ def predict_mask(model, pil_img, device, threshold=0.5):
     mask = Image.fromarray(mask).convert("L").resize(orig_size, Image.NEAREST)
     return mask
 
-def apply_mask_with_background(pil_img, mask_pil, bg_type="black"):
-    """Apply mask with selected background."""
-    img_rgba = pil_img.convert("RGBA")
-    mask = np.array(mask_pil) > 127
-    img_np = np.array(img_rgba)
-
-    if bg_type == "transparent":
-        out = np.zeros_like(img_np)
-        out[..., :3] = img_np[..., :3]
-        out[..., 3] = mask.astype(np.uint8) * 255
-        return Image.fromarray(out)
-
-    if bg_type == "subject_only":
-        out = np.zeros_like(img_np)
-        out[mask] = img_np[mask]
-        return Image.fromarray(out)
-
-    # For solid colors
-    colors = {
-        "black": (0, 0, 0),
-        "white": (255, 255, 255),
-        "blue": (0, 0, 255),
-        "green": (0, 255, 0),
-        "red": (255, 0, 0)
-    }
-    bg_color = colors.get(bg_type, (0, 0, 0))
-    out = np.ones_like(img_np[..., :3]) * np.array(bg_color, dtype=np.uint8)
-    out[mask] = img_np[mask, :3]
+def apply_mask_to_image(pil_img, mask_pil):
+    """Apply binary mask on original image."""
+    img_np = np.array(pil_img.convert("RGB"))
+    m = np.array(mask_pil) > 127
+    out = np.zeros_like(img_np)
+    out[m] = img_np[m]
     return Image.fromarray(out)
 
 # ----------------- APP UI -----------------
@@ -172,6 +150,7 @@ uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png"
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
 
+    # Resize large images for faster inference
     MAX_SIZE = 512
     if max(img.size) > MAX_SIZE:
         img.thumbnail((MAX_SIZE, MAX_SIZE))
@@ -186,27 +165,17 @@ if uploaded_file:
         if run_button:
             with st.spinner("Processing... Please wait..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
+                result = apply_mask_to_image(img, mask)
 
-                # Default = black background
-                result = apply_mask_with_background(img, mask, bg_type="black")
-                st.image(result, caption="Processed Output", use_container_width=True)
-
-                # Background selection
-                bg_option = st.selectbox(
-                    "🎨 Choose Background:",
-                    ["black", "white", "blue", "green", "red", "transparent", "subject_only"]
-                )
-
-                final_img = apply_mask_with_background(img, mask, bg_type=bg_option)
+                st.image(result, caption="Background Removed", use_container_width=True)
 
                 buf = io.BytesIO()
-                final_img.save(buf, format="PNG")
+                result.save(buf, format="PNG")
                 buf.seek(0)
-
                 st.download_button(
-                    f"⬇ Download ({bg_option})",
+                    "⬇ Download Processed Image",
                     data=buf,
-                    file_name=f"cutout_{bg_option}.png",
+                    file_name="cutout_result.png",
                     mime="image/png",
                     use_container_width=True
                 )
