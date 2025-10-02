@@ -67,13 +67,16 @@ st.markdown(
 
 # ----------------- LOTTIE LOADER -----------------
 def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200:
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except:
         return None
-    return r.json()
 
 # ✅ Working animation link
-ai_animation = load_lottieurl("https://lottie.host/4e40d6a4-b5df-46c1-9cb0-1a56e7ea73a3/3Ck8JY.json")
+ai_animation = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_qp1q7mct.json")
 
 # ----------------- HERO SECTION -----------------
 st.markdown(
@@ -92,7 +95,10 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st_lottie(ai_animation, height=200, key="ai")
+if ai_animation:
+    st_lottie(ai_animation, height=200, key="ai")
+else:
+    st.info("✨ Animation could not be loaded, but the app is ready!")
 
 st.markdown("---")
 
