@@ -21,17 +21,17 @@ import io
 from huggingface_hub import hf_hub_download
 
 # ----------------- STREAMLIT CONFIG -----------------
-st.set_page_config(page_title="VisionExtract - AI Subject Isolation", layout="wide")
+st.set_page_config(page_title="CutOut Pro - Smart Background Remover", layout="wide")
 
 # ----------------- HEADER -----------------
 st.markdown(
     """
     <div style="text-align: center; padding: 20px;">
-        <h1 style="color:#2E86C1;">VisionExtract — AI-Powered Subject Isolation</h1>
+        <h1 style="color:#2E86C1;">CutOut Pro — Smart Background Remover</h1>
         <p style="font-size:18px; color:#444; max-width:700px; margin:auto;">
-            Automatically remove image backgrounds and isolate the main subject
-            using state-of-the-art deep learning.
-            Upload your own image or check out the demo below.
+            Transform your images effortlessly. CutOut Pro intelligently removes backgrounds,
+            isolating your subject with professional accuracy.
+            Upload an image and let AI do the rest.
         </p>
     </div>
     """,
@@ -45,13 +45,13 @@ demo_col1, demo_col2 = st.columns(2)
 
 with demo_col1:
     st.image(
-        "https://raw.githubusercontent.com/<your-username>/<repo-name>/main/demo_input.jpg",
+        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png",
         caption="Original Image", use_container_width=True
     )
 
 with demo_col2:
     st.image(
-        "https://raw.githubusercontent.com/<your-username>/<repo-name>/main/demo_output.png",
+        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png",
         caption="AI-Isolated Subject", use_container_width=True
     )
 
@@ -139,8 +139,8 @@ if uploaded_file:
 
     with col1:
         st.image(img, caption="Uploaded Image", use_container_width=True)
-        # ✅ Button now below the uploaded image
-        run_button = st.button("🚀 Run AI Inference", use_container_width=True)
+        # ✅ Button now directly below the uploaded image
+        run_button = st.button("🚀 Run Background Removal", use_container_width=True)
 
     with col2:
         if run_button:
@@ -154,9 +154,9 @@ if uploaded_file:
                 result.save(buf, format="PNG")
                 buf.seek(0)
                 st.download_button(
-                    "⬇ Download Isolated Subject",
+                    "⬇ Download Processed Image",
                     data=buf,
-                    file_name="subject_isolated.png",
+                    file_name="cutout_result.png",
                     mime="image/png",
                     use_container_width=True
                 )
