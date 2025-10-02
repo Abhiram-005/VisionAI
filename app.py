@@ -24,86 +24,55 @@ from huggingface_hub import hf_hub_download
 # ----------------- STREAMLIT CONFIG -----------------
 st.set_page_config(page_title="CutOut Pro - Smart Background Remover", layout="wide")
 
-# ----------------- ANIMATED BACKGROUND -----------------
+# ----------------- HERO SECTION -----------------
 st.markdown(
     """
-    <style>
-    /* Full-page animated gradient background */
-    body {
-        background: linear-gradient(-45deg, #1E90FF, #00BFFF, #87CEFA, #4682B4);
-        background-size: 400% 400%;
-        animation: gradientBG 15s ease infinite;
-    }
-
-    @keyframes gradientBG {
-        0% {background-position: 0% 50%;}
-        50% {background-position: 100% 50%;}
-        100% {background-position: 0% 50%;}
-    }
-
-    /* Streamlit container transparency */
-    .stApp {
-        background: transparent;
-    }
-
-    /* Center header */
-    .main-header {
-        text-align: center;
-        padding: 20px;
-    }
-
-    h1 {
-        color: #ffffff;
-        font-size: 2.5em;
-        font-weight: 700;
-    }
-
-    p {
-        color: #f0f0f0;
-        font-size: 18px;
-    }
-
-    /* Card style for demo + uploads */
-    .stImage {
-        border-radius: 15px;
-        box-shadow: 0px 4px 15px rgba(0,0,0,0.25);
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ----------------- HEADER -----------------
-st.markdown(
-    """
-    <div class="main-header">
-        <h1>CutOut Pro — Smart Background Remover</h1>
-        <p>
+    <div style="text-align: center; padding: 30px;">
+        <h1 style="color:#1E90FF; font-size: 42px; margin-bottom: 10px;">
+            ✨ CutOut Pro — Smart Background Remover
+        </h1>
+        <p style="font-size:18px; color:#444; max-width:800px; margin:auto; line-height:1.6;">
             Transform your images effortlessly. <b>CutOut Pro</b> intelligently removes backgrounds,
-            isolating your subject with professional precision.<br>
-            Upload your own image or explore the demo below.
+            isolating your subject with professional accuracy.
+            Upload your own image or try the demo below!
         </p>
     </div>
     """,
     unsafe_allow_html=True
 )
 
+st.markdown("---")
+
 # ----------------- DEMO SECTION -----------------
-st.subheader("🔹 Demo Preview")
+st.markdown("## 🔹 Demo Preview")
+st.markdown(
+    """
+    <div style="text-align: center; margin-bottom: 20px; font-size:16px; color:#555;">
+        See how our AI instantly isolates subjects with pixel-perfect precision.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
-demo_col1, demo_col2 = st.columns(2)
-
-with demo_col1:
-    st.image(
-        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png",
-        caption="Original Image", use_container_width=True
-    )
-
-with demo_col2:
-    st.image(
-        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png",
-        caption="AI-Isolated Subject", use_container_width=True
-    )
+st.markdown(
+    """
+    <div style="display: flex; justify-content: center; gap: 60px; margin-bottom: 50px;">
+        <div style="text-align: center;">
+            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png"
+                 alt="Original Demo"
+                 style="width:220px; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
+            <p style="margin-top:8px; font-size:14px; color:#444;">Original Image</p>
+        </div>
+        <div style="text-align: center;">
+            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png"
+                 alt="Isolated Subject"
+                 style="width:220px; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
+            <p style="margin-top:8px; font-size:14px; color:#444;">AI-Isolated Subject</p>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
 
 st.markdown("---")
 
@@ -168,14 +137,15 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 change this
+HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
-st.subheader("🔹 Upload Your Image")
+# ----------------- UPLOAD SECTION -----------------
+st.markdown("## 📤 Try It Yourself")
 
-uploaded_file = st.file_uploader("Choose a file (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
@@ -185,11 +155,10 @@ if uploaded_file:
     if max(img.size) > MAX_SIZE:
         img.thumbnail((MAX_SIZE, MAX_SIZE))
 
-    col1, col2 = st.columns(2)
+    col1, col2 = st.columns([1, 1])
 
     with col1:
         st.image(img, caption="Uploaded Image", use_container_width=True)
-        # ✅ Button now directly below the uploaded image
         run_button = st.button("🚀 Run Background Removal", use_container_width=True)
 
     with col2:
@@ -198,7 +167,7 @@ if uploaded_file:
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
 
-                st.image(result, caption="Isolated Subject", use_container_width=True)
+                st.image(result, caption="Background Removed", use_container_width=True)
 
                 buf = io.BytesIO()
                 result.save(buf, format="PNG")
