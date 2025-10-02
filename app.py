@@ -46,14 +46,15 @@ demo_col1, demo_col2 = st.columns(2)
 with demo_col1:
     st.image(
         "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png",
-        caption="Original Image", use_container_width=True
+        caption="Original Image", use_container_width=True,width=150
     )
 
 with demo_col2:
     st.image(
         "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png",
-        caption="AI-Isolated Subject", use_container_width=True
+        caption="AI-Isolated Subject", use_container_width=True,width=150
     )
+
 
 st.markdown("---")
 
