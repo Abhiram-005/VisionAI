@@ -20,125 +20,99 @@ from PIL import Image
 import numpy as np
 import io
 from huggingface_hub import hf_hub_download
-from streamlit_lottie import st_lottie
-import requests
 
 # ----------------- STREAMLIT CONFIG -----------------
-st.set_page_config(
-    page_title="CutOut Pro - Smart Background Remover",
-    layout="wide",
-    page_icon="✨",
-    initial_sidebar_state="collapsed"
-)
+st.set_page_config(page_title="CutOut Pro - Smart Background Remover", layout="wide")
 
-# ----------------- CUSTOM THEME + CSS -----------------
+# ----------------- ANIMATED BACKGROUND -----------------
 st.markdown(
     """
     <style>
-        /* Buttons */
-        .stButton>button {
-            background: linear-gradient(90deg, #1E90FF, #00BFFF);
-            color: white;
-            border-radius: 8px;
-            padding: 10px 20px;
-            font-size: 16px;
-            border: none;
-            transition: all 0.3s ease-in-out;
-        }
-        .stButton>button:hover {
-            transform: scale(1.05);
-            background: linear-gradient(90deg, #00BFFF, #1E90FF);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
+    /* Full-page animated gradient background */
+    body {
+        background: linear-gradient(-45deg, #1E90FF, #00BFFF, #87CEFA, #4682B4);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
+    }
 
-        h1, h2, h3 {
-            text-align: center;
-            font-family: 'Segoe UI', sans-serif;
-        }
+    @keyframes gradientBG {
+        0% {background-position: 0% 50%;}
+        50% {background-position: 100% 50%;}
+        100% {background-position: 0% 50%;}
+    }
 
-        img {
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
+    /* Streamlit container transparency */
+    .stApp {
+        background: transparent;
+    }
+
+    /* Center header */
+    .main-header {
+        text-align: center;
+        padding: 20px;
+    }
+
+    h1 {
+        color: #ffffff;
+        font-size: 2.5em;
+        font-weight: 700;
+    }
+
+    p {
+        color: #f0f0f0;
+        font-size: 18px;
+    }
+
+    /* Card style for demo + uploads */
+    .stImage {
+        border-radius: 15px;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.25);
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# ----------------- LOTTIE LOADER -----------------
-def load_lottieurl(url: str):
-    try:
-        r = requests.get(url)
-        if r.status_code != 200:
-            return None
-        return r.json()
-    except:
-        return None
-
-# ✅ Working animation link
-ai_animation = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_qp1q7mct.json")
-
-# ----------------- HERO SECTION -----------------
+# ----------------- HEADER -----------------
 st.markdown(
     """
-    <div style="text-align: center; padding: 30px;">
-        <h1 style="color:#1E90FF; font-size: 42px; margin-bottom: 10px;">
-            ✨ CutOut Pro — Smart Background Remover
-        </h1>
-        <p style="font-size:18px; color:#444; max-width:800px; margin:auto; line-height:1.6;">
+    <div class="main-header">
+        <h1>CutOut Pro — Smart Background Remover</h1>
+        <p>
             Transform your images effortlessly. <b>CutOut Pro</b> intelligently removes backgrounds,
-            isolating your subject with professional accuracy.
-            Upload your own image or try the demo below!
+            isolating your subject with professional precision.<br>
+            Upload your own image or explore the demo below.
         </p>
     </div>
     """,
     unsafe_allow_html=True
 )
 
-if ai_animation:
-    st_lottie(ai_animation, height=200, key="ai")
-else:
-    st.info("✨ Animation could not be loaded, but the app is ready!")
-
-st.markdown("---")
-
 # ----------------- DEMO SECTION -----------------
-st.markdown("## 🔹 Demo Preview")
-st.markdown(
-    """
-    <div style="text-align: center; margin-bottom: 20px; font-size:16px; color:#555;">
-        See how our AI instantly isolates subjects with pixel-perfect precision.
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.subheader("🔹 Demo Preview")
 
-st.markdown(
-    """
-    <div style="display: flex; justify-content: center; gap: 80px; margin-bottom: 50px;">
-        <div style="text-align: center;">
-            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png"
-                 alt="Original Demo"
-                 style="width:220px;">
-            <p style="margin-top:8px; font-size:14px; color:#444;">Original Image</p>
-        </div>
-        <div style="text-align: center;">
-            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png"
-                 alt="Isolated Subject"
-                 style="width:220px;">
-            <p style="margin-top:8px; font-size:14px; color:#444;">AI-Isolated Subject</p>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+demo_col1, demo_col2 = st.columns(2)
+
+with demo_col1:
+    st.image(
+        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png",
+        caption="Original Image", use_container_width=True
+    )
+
+with demo_col2:
+    st.image(
+        "https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png",
+        caption="AI-Isolated Subject", use_container_width=True
+    )
 
 st.markdown("---")
 
 # ----------------- MODEL LOADING -----------------
 @st.cache_resource
 def load_model_from_hf(repo_id, filename, device):
+    """Download model from Hugging Face and load into memory (cached)."""
     model_path = hf_hub_download(repo_id=repo_id, filename=filename)
+
     model = smp.UnetPlusPlus(
         encoder_name="efficientnet-b5",
         encoder_weights=None,
@@ -162,6 +136,7 @@ def image_to_tensor(pil_img, target_size=None):
     return T.Compose(transforms)(pil_img).unsqueeze(0)
 
 def pad_image(pil_img):
+    """Pad image so width and height are divisible by 32 (required by SMP)."""
     w, h = pil_img.size
     new_w = (w + 31) // 32 * 32
     new_h = (h + 31) // 32 * 32
@@ -170,8 +145,9 @@ def pad_image(pil_img):
     return result, (w, h)
 
 def predict_mask(model, pil_img, device, threshold=0.5):
+    """Run model inference and return binary mask."""
     padded_img, orig_size = pad_image(pil_img)
-    x = image_to_tensor(pil_img).to(device)
+    x = image_to_tensor(padded_img).to(device)
     with torch.no_grad():
         out = model(x)
     out = out.cpu()
@@ -183,6 +159,7 @@ def predict_mask(model, pil_img, device, threshold=0.5):
     return mask
 
 def apply_mask_to_image(pil_img, mask_pil):
+    """Apply binary mask on original image."""
     img_np = np.array(pil_img.convert("RGB"))
     m = np.array(mask_pil) > 127
     out = np.zeros_like(img_np)
@@ -191,35 +168,37 @@ def apply_mask_to_image(pil_img, mask_pil):
 
 # ----------------- APP UI -----------------
 DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
+HF_REPO = "Abhiram1705/VisionAI"   # 🔹 change this
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
 
-# ----------------- UPLOAD SECTION -----------------
-st.markdown("## 📤 Try It Yourself")
+st.subheader("🔹 Upload Your Image")
 
-uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Choose a file (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
 
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
+
+    # Resize large images for faster inference
     MAX_SIZE = 512
     if max(img.size) > MAX_SIZE:
         img.thumbnail((MAX_SIZE, MAX_SIZE))
 
-    col1, col2 = st.columns([1, 1])
+    col1, col2 = st.columns(2)
 
     with col1:
         st.image(img, caption="Uploaded Image", use_container_width=True)
+        # ✅ Button now directly below the uploaded image
         run_button = st.button("🚀 Run Background Removal", use_container_width=True)
 
     with col2:
         if run_button:
-            with st.spinner("⚡ AI is working... Please wait..."):
+            with st.spinner("Processing... Please wait..."):
                 mask = predict_mask(model, img, DEVICE, threshold=0.5)
                 result = apply_mask_to_image(img, mask)
 
-                st.image(result, caption="Background Removed", use_container_width=True)
+                st.image(result, caption="Isolated Subject", use_container_width=True)
 
                 buf = io.BytesIO()
                 result.save(buf, format="PNG")
