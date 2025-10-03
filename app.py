@@ -157,8 +157,8 @@ def apply_mask_with_background(pil_img, mask_pil, bg_type="black", custom_color=
     return Image.fromarray(out)
 
 # ----------------- APP UI -----------------
-DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
+DEVICE = torch.device("cpu")
+HF_REPO = "Abhiram1705/VisionAI"   # Replace with your HF repo
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
@@ -175,44 +175,45 @@ if uploaded_file:
     if max(img.size) > MAX_SIZE:
         img.thumbnail((MAX_SIZE, MAX_SIZE))
 
-    col1, col2 = st.columns([1, 1])
+    st.image(img, caption="Uploaded Image", use_container_width=True)
 
-    with col1:
-        st.image(img, caption="Uploaded Image", use_container_width=True)
-        run_button = st.button("🚀 Run Background Removal", use_container_width=True)
+    run_button = st.button("🚀 Run Background Removal", use_container_width=True)
 
-    with col2:
-        if run_button:
-            with st.spinner("Processing... Please wait..."):
-                mask = predict_mask(model, img, DEVICE, threshold=0.5)
+    if run_button:
+        with st.spinner("Processing... Please wait..."):
+            mask = predict_mask(model, img, DEVICE, threshold=0.5)
 
-                # Background selection
-                bg_option = st.selectbox(
-                    "🎨 Choose Background:",
-                    ["black", "white", "blue", "green", "red", "transparent", "custom"]
-                )
+        # Default output
+        final_img = apply_mask_with_background(img, mask, bg_type="black")
 
-                custom_color = None
-                if bg_option == "custom":
-                    custom_color = st.color_picker("Pick a custom background color", "#FF5733")
+        # Show final image first
+        img_container = st.empty()
+        img_container.image(final_img, caption="Background Removed", use_container_width=True)
 
-                # Final image (only one output!)
-                final_img = apply_mask_with_background(img, mask, bg_type=bg_option, custom_color=custom_color)
+        # Options BELOW the output
+        bg_option = st.selectbox(
+            "🎨 Choose Background:",
+            ["black", "white", "blue", "green", "red", "transparent", "custom"]
+        )
 
-                # Show once at the top
-                st.image(final_img, caption=f"Output ({bg_option})", use_container_width=True)
+        custom_color = None
+        if bg_option == "custom":
+            custom_color = st.color_picker("Pick a custom background color", "#FF5733")
 
-                # Download
-                buf = io.BytesIO()
-                final_img.save(buf, format="PNG")
-                buf.seek(0)
+        # Update final image dynamically
+        final_img = apply_mask_with_background(img, mask, bg_type=bg_option, custom_color=custom_color)
+        img_container.image(final_img, caption=f"Output ({bg_option})", use_container_width=True)
 
-                st.download_button(
-                    f"⬇ Download ({bg_option})",
-                    data=buf,
-                    file_name=f"cutout_{bg_option}.png",
-                    mime="image/png",
-                    use_container_width=True
-                )
+        buf = io.BytesIO()
+        final_img.save(buf, format="PNG")
+        buf.seek(0)
+
+        st.download_button(
+            f"⬇ Download ({bg_option})",
+            data=buf,
+            file_name=f"cutout_{bg_option}.png",
+            mime="image/png",
+            use_container_width=True
+        )
 else:
     st.info("👆 Upload an image to get started!")
