@@ -33,7 +33,7 @@ st.markdown(
         </h1>
         <p style="font-size:18px; color:#444; max-width:800px; margin:auto; line-height:1.6;">
             Transform your images effortlessly. <b>CutOut Pro</b> intelligently removes backgrounds,
-            isolating your subject with professional accuracy.<br>
+            isolating your subject with professional accuracy.
             Upload your own image or try the demo below!
         </p>
     </div>
@@ -127,38 +127,18 @@ def predict_mask(model, pil_img, device, threshold=0.5):
     mask = Image.fromarray(mask).convert("L").resize(orig_size, Image.NEAREST)
     return mask
 
-def apply_mask_with_background(pil_img, mask_pil, bg_type="black", custom_color=None):
-    """Apply mask with selected background (supports custom hex)."""
-    img_rgba = pil_img.convert("RGBA")
+def apply_mask_with_background(pil_img, mask_pil, bg_color=(0, 0, 0)):
+    """Apply mask on original image with chosen background color."""
+    img_np = np.array(pil_img.convert("RGB"))
     mask = np.array(mask_pil) > 127
-    img_np = np.array(img_rgba)
 
-    if bg_type == "transparent":
-        out = np.zeros_like(img_np)
-        out[..., :3] = img_np[..., :3]
-        out[..., 3] = mask.astype(np.uint8) * 255
-        return Image.fromarray(out)
-
-    if bg_type == "custom" and custom_color:
-        hex_color = tuple(int(custom_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
-        bg_color = hex_color
-    else:
-        colors = {
-            "black": (0, 0, 0),
-            "white": (255, 255, 255),
-            "blue": (0, 0, 255),
-            "green": (0, 255, 0),
-            "red": (255, 0, 0)
-        }
-        bg_color = colors.get(bg_type, (0, 0, 0))
-
-    out = np.ones_like(img_np[..., :3]) * np.array(bg_color, dtype=np.uint8)
-    out[mask] = img_np[mask, :3]
+    out = np.ones_like(img_np) * np.array(bg_color, dtype=np.uint8)
+    out[mask] = img_np[mask]
     return Image.fromarray(out)
 
 # ----------------- APP UI -----------------
-DEVICE = torch.device("cpu")
-HF_REPO = "Abhiram1705/VisionAI"   # Replace with your HF repo
+DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
+HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
 MODEL_FILENAME = "unetpp_effb5.pth"
 
 model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
@@ -171,47 +151,41 @@ uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png"
 if uploaded_file:
     img = Image.open(uploaded_file).convert("RGB")
 
+    # Resize large images for faster inference
     MAX_SIZE = 512
     if max(img.size) > MAX_SIZE:
         img.thumbnail((MAX_SIZE, MAX_SIZE))
 
     st.image(img, caption="Uploaded Image", use_container_width=True)
-
     run_button = st.button("🚀 Run Background Removal", use_container_width=True)
 
     if run_button:
         with st.spinner("Processing... Please wait..."):
             mask = predict_mask(model, img, DEVICE, threshold=0.5)
 
-        # Default output
-        final_img = apply_mask_with_background(img, mask, bg_type="black")
+        # Default black background initially
+        final_img = apply_mask_with_background(img, mask, bg_color=(0, 0, 0))
 
-        # Show final image first
-        img_container = st.empty()
-        img_container.image(final_img, caption="Background Removed", use_container_width=True)
+        # Show isolated subject with black bg
+        img_placeholder = st.empty()
+        img_placeholder.image(final_img, caption="Background Removed", use_container_width=True)
 
-        # Options BELOW the output
-        bg_option = st.selectbox(
-            "🎨 Choose Background:",
-            ["black", "white", "blue", "green", "red", "transparent", "custom"]
-        )
+        # 🎨 Color Picker BELOW the output
+        chosen_color = st.color_picker("Pick a background color", "#000000")
+        hex_to_rgb = tuple(int(chosen_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
 
-        custom_color = None
-        if bg_option == "custom":
-            custom_color = st.color_picker("Pick a custom background color", "#FF5733")
+        # Update output with new color
+        final_img = apply_mask_with_background(img, mask, bg_color=hex_to_rgb)
+        img_placeholder.image(final_img, caption="Background Updated", use_container_width=True)
 
-        # Update final image dynamically
-        final_img = apply_mask_with_background(img, mask, bg_type=bg_option, custom_color=custom_color)
-        img_container.image(final_img, caption=f"Output ({bg_option})", use_container_width=True)
-
+        # Download button
         buf = io.BytesIO()
         final_img.save(buf, format="PNG")
         buf.seek(0)
-
         st.download_button(
-            f"⬇ Download ({bg_option})",
+            "⬇ Download Image",
             data=buf,
-            file_name=f"cutout_{bg_option}.png",
+            file_name="cutout_result.png",
             mime="image/png",
             use_container_width=True
         )
