@@ -7,6 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1DuHHGYlCw5txt0ICTCFy8ZIo82N167sR
 """
 
+# app.py
 # -*- coding: utf-8 -*-
 import warnings
 warnings.filterwarnings("ignore", category=SyntaxWarning)
@@ -19,68 +20,60 @@ from torchvision import transforms as T
 from PIL import Image
 import numpy as np
 import io
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, hf_hub_url
 
-# ----------------- STREAMLIT CONFIG -----------------
+# --------- CONFIG ----------
 st.set_page_config(page_title="CutOut Pro - Smart Background Remover", layout="wide")
 
-# ----------------- HERO SECTION -----------------
+# ---------- STYLE (keeps look clean) ----------
 st.markdown(
     """
-    <div style="text-align: center; padding: 30px;">
-        <h1 style="color:#1E90FF; font-size: 42px; margin-bottom: 10px;">
-            ✨ CutOut Pro — Smart Background Remover
-        </h1>
-        <p style="font-size:18px; color:#444; max-width:800px; margin:auto; line-height:1.6;">
-            Transform your images effortlessly. <b>CutOut Pro</b> intelligently removes backgrounds,
-            isolating your subject with professional accuracy.<br>
-            Upload your own image or try the demo below!
-        </p>
-    </div>
+    <style>
+      .main { padding: 18px 36px; }
+      img { border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.18); }
+      .stButton>button { border-radius:8px; padding:8px 16px; font-weight:600; }
+    </style>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
+
+# ---------- HERO ----------
+st.markdown("<div style='text-align:center; margin-bottom:6px;'>"
+            "<h1 style='color:#1E90FF; margin:0;'>✨ CutOut Pro — Smart Background Remover</h1>"
+            "<p style='color:#444; max-width:900px; margin:auto;'>"
+            "Transform your images effortlessly. <b>CutOut Pro</b> isolates the subject with professional accuracy. "
+            "Upload an image and choose a background (or transparent/subject-only) to download a PNG."
+            "</p></div>",
+            unsafe_allow_html=True)
 
 st.markdown("---")
 
-# ----------------- DEMO SECTION -----------------
-st.markdown("## 🔹 Demo Preview")
-st.markdown(
-    """
-    <div style="text-align: center; margin-bottom: 20px; font-size:16px; color:#555;">
-        See how our AI instantly isolates subjects with pixel-perfect precision.
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    """
-    <div style="display: flex; justify-content: center; gap: 60px; margin-bottom: 50px;">
-        <div style="text-align: center;">
-            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png"
-                 alt="Original Demo"
-                 style="width:220px; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
-            <p style="margin-top:8px; font-size:14px; color:#444;">Original Image</p>
-        </div>
-        <div style="text-align: center;">
-            <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png"
-                 alt="Isolated Subject"
-                 style="width:220px; border-radius:14px; box-shadow:0 4px 10px rgba(0,0,0,0.2);">
-            <p style="margin-top:8px; font-size:14px; color:#444;">AI-Isolated Subject</p>
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
-
+# ---------- DEMO (small) ----------
+st.markdown("### 🔹 Demo Preview")
+demo_html = """
+<div style="display:flex; gap:40px; justify-content:center; align-items:center; margin-bottom: 18px;">
+  <div style="text-align:center">
+    <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_input.png" width="200"/>
+    <div style="font-size:13px; color:#333; margin-top:6px;">Original Image</div>
+  </div>
+  <div style="text-align:center">
+    <img src="https://raw.githubusercontent.com/Abhiram-005/VisionAI/main/demo_output.png" width="200"/>
+    <div style="font-size:13px; color:#333; margin-top:6px;">Isolated Subject</div>
+  </div>
+</div>
+"""
+st.markdown(demo_html, unsafe_allow_html=True)
 st.markdown("---")
 
-# ----------------- MODEL LOADING -----------------
+# ---------- MODEL HELPERS ----------
 @st.cache_resource
-def load_model_from_hf(repo_id, filename, device):
-    """Download model from Hugging Face and load into memory (cached)."""
-    model_path = hf_hub_download(repo_id=repo_id, filename=filename)
+def load_model_from_hf(repo_id: str, filename: str, token: str | None = None, device="cpu"):
+    """Download and load model from HF; returns PyTorch model on device."""
+    try:
+        # pass token if provided
+        model_path = hf_hub_download(repo_id=repo_id, filename=filename, token=token) if token else hf_hub_download(repo_id=repo_id, filename=filename)
+    except Exception as e:
+        raise RuntimeError(f"Unable to download model from Hugging Face: {e}")
 
     model = smp.UnetPlusPlus(
         encoder_name="efficientnet-b5",
@@ -105,7 +98,6 @@ def image_to_tensor(pil_img, target_size=None):
     return T.Compose(transforms)(pil_img).unsqueeze(0)
 
 def pad_image(pil_img):
-    """Pad image so width and height are divisible by 32 (required by SMP)."""
     w, h = pil_img.size
     new_w = (w + 31) // 32 * 32
     new_h = (h + 31) // 32 * 32
@@ -114,98 +106,158 @@ def pad_image(pil_img):
     return result, (w, h)
 
 def predict_mask(model, pil_img, device, threshold=0.5):
-    """Run model inference and return binary mask."""
+    """Return binary mask PIL image (mode 'L') sized same as input."""
     padded_img, orig_size = pad_image(pil_img)
     x = image_to_tensor(padded_img).to(device)
     with torch.no_grad():
         out = model(x)
     out = out.cpu()
     if out.shape[1] == 1:
-        mask = (torch.sigmoid(out)[0, 0].numpy() > threshold).astype('uint8') * 255
+        mask_arr = (torch.sigmoid(out)[0,0].numpy() > threshold).astype("uint8") * 255
     else:
-        mask = (out.argmax(1)[0].numpy() != 0).astype('uint8') * 255
-    mask = Image.fromarray(mask).convert("L").resize(orig_size, Image.NEAREST)
+        mask_arr = (out.argmax(1)[0].numpy() != 0).astype("uint8") * 255
+    mask = Image.fromarray(mask_arr).convert("L").resize(orig_size, Image.NEAREST)
     return mask
 
-def apply_mask_with_background(pil_img, mask_pil, bg_type="black"):
-    """Apply mask with selected background."""
-    img_rgba = pil_img.convert("RGBA")
+# ---------- IMAGE COMPOSITION HELPERS ----------
+def hex_to_rgb(hex_color: str):
+    hex_color = hex_color.lstrip("#")
+    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+def compose_solid_bg(img_pil: Image.Image, mask_pil: Image.Image, color_rgb: tuple):
+    """Return RGB PIL with solid background color (tuple r,g,b)."""
+    rgb = img_pil.convert("RGB")
+    img_np = np.array(rgb)
     mask = np.array(mask_pil) > 127
-    img_np = np.array(img_rgba)
+    bg = np.ones_like(img_np) * np.array(color_rgb, dtype=np.uint8)
+    bg[mask] = img_np[mask]
+    return Image.fromarray(bg)
 
-    if bg_type == "transparent":
-        out = np.zeros_like(img_np)
-        out[..., :3] = img_np[..., :3]
-        out[..., 3] = mask.astype(np.uint8) * 255
-        return Image.fromarray(out)
+def compose_transparent(img_pil: Image.Image, mask_pil: Image.Image):
+    """Return RGBA PIL with original RGB where mask true, alpha=mask."""
+    rgb = img_pil.convert("RGB")
+    img_np = np.array(rgb)
+    mask = (np.array(mask_pil) > 127).astype(np.uint8) * 255
+    alpha = mask
+    rgba = np.dstack((img_np, alpha.astype(np.uint8)))
+    return Image.fromarray(rgba, mode="RGBA")
 
+def compose_subject_only(img_pil: Image.Image, mask_pil: Image.Image, pad=4):
+    """Return cropped RGBA image containing only the subject (transparent background)."""
+    rgba = compose_transparent(img_pil, mask_pil)
+    alpha = np.array(rgba.split()[-1])
+    ys, xs = np.where(alpha > 0)
+    if len(xs) == 0 or len(ys) == 0:
+        return None
+    x0, x1 = max(xs.min()-pad, 0), min(xs.max()+pad, rgba.width-1)
+    y0, y1 = max(ys.min()-pad, 0), min(ys.max()+pad, rgba.height-1)
+    return rgba.crop((x0, y0, x1+1, y1+1))
 
+# ---------- APP UI & Logic ----------
+DEVICE = torch.device("cpu")  # Streamlit Cloud uses CPU
+HF_REPO = "Abhiram1705/VisionAI"      # <<< set to your HF repo
+MODEL_FILENAME = "unetpp_effb5.pth"   # <<< set to your model filename
 
-    # For solid colors
-    colors = {
-        "black": (0, 0, 0),
-        "white": (255, 255, 255),
-        "blue": (0, 0, 255),
-        "green": (0, 255, 0),
-        "red": (255, 0, 0)
-    }
-    bg_color = colors.get(bg_type, (0, 0, 0))
-    out = np.ones_like(img_np[..., :3]) * np.array(bg_color, dtype=np.uint8)
-    out[mask] = img_np[mask, :3]
-    return Image.fromarray(out)
+# If your HF repo is private, store token in Streamlit secrets: {"HF_TOKEN":"hf_xxx"}
+HF_TOKEN = st.secrets.get("HF_TOKEN") if hasattr(st, "secrets") else None
 
-# ----------------- APP UI -----------------
-DEVICE = torch.device("cpu")  # Streamlit Cloud = CPU only
-HF_REPO = "Abhiram1705/VisionAI"   # 🔹 Replace with your Hugging Face repo
-MODEL_FILENAME = "unetpp_effb5.pth"
+# Lazy load model with graceful error
+model = None
+try:
+    model = load_model_from_hf(HF_REPO, MODEL_FILENAME, token=HF_TOKEN, device=DEVICE)
+except Exception as e:
+    st.error(f"Unable to load model: {e}")
+    st.stop()
 
-model = load_model_from_hf(HF_REPO, MODEL_FILENAME, DEVICE)
+st.markdown("## 📤 Upload & Process")
 
-# ----------------- UPLOAD SECTION -----------------
-st.markdown("## 📤 Try It Yourself")
+# File uploader
+uploaded_file = st.file_uploader("Upload image (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
 
-uploaded_file = st.file_uploader("Upload an image (PNG, JPG, JPEG)", type=["png", "jpg", "jpeg"])
+# Keep mask & original in session_state to avoid recompute
+if "mask" not in st.session_state:
+    st.session_state["mask"] = None
+if "orig_img" not in st.session_state:
+    st.session_state["orig_img"] = None
 
 if uploaded_file:
-    img = Image.open(uploaded_file).convert("RGB")
+    try:
+        img = Image.open(uploaded_file).convert("RGB")
+    except Exception:
+        st.error("Cannot open the uploaded file as an image.")
+        st.stop()
 
-    MAX_SIZE = 512
-    if max(img.size) > MAX_SIZE:
-        img.thumbnail((MAX_SIZE, MAX_SIZE))
+    # Resize large images for faster inference
+    MAX_SIDE = 1024
+    if max(img.size) > MAX_SIDE:
+        img.thumbnail((MAX_SIDE, MAX_SIDE))
 
     col1, col2 = st.columns([1, 1])
 
+    # Left: show original and Run button below it
     with col1:
-        st.image(img, caption="Uploaded Image", use_container_width=True)
-        run_button = st.button("🚀 Run Background Removal", use_container_width=True)
+        st.image(img, caption="Uploaded Image", width=420)
+        if st.button("🚀 Run Background Removal"):
+            with st.spinner("Running model..."):
+                mask_pil = predict_mask(model, img, DEVICE, threshold=0.5)
+                # store in session
+                st.session_state["mask"] = mask_pil
+                st.session_state["orig_img"] = img
+            st.success("Inference complete — choose a background and download below.")
 
+    # Right: show results area (if mask exists)
     with col2:
-        if run_button:
-            with st.spinner("Processing... Please wait..."):
-                mask = predict_mask(model, img, DEVICE, threshold=0.5)
+        if st.session_state["mask"] is None:
+            st.info("Run inference to see result here.")
+        else:
+            mask_pil = st.session_state["mask"]
+            orig_img = st.session_state["orig_img"]
 
-                # Default = black background
-                result = apply_mask_with_background(img, mask, bg_type="black")
-                st.image(result, caption="Processed Output", use_container_width=True)
+            # show small preview default (black)
+            preview = compose_solid_bg(orig_img, mask_pil, (0,0,0))
+            st.image(preview, caption="Preview (default: black)", width=420)
 
-                # Background selection
-                bg_option = st.selectbox(
-                    "🎨 Choose Background:",
-                    ["black", "white", "blue", "green", "red", "transparent"]
-                )
+            # Controls: preset palette, custom color picker, transparent, subject-only
+            st.markdown("### 🎨 Background options")
+            presets = ["black","white","blue","green","red"]
+            choice = st.selectbox("Choose background option", presets + ["Custom color", "Transparent (PNG)"])
 
-                final_img = apply_mask_with_background(img, mask, bg_type=bg_option)
+            custom_hex = None
+            if choice == "Custom color":
+                custom_hex = st.color_picker("Pick background color", "#000000")
+                color_rgb = hex_to_rgb(custom_hex)
+                final_img = compose_solid_bg(orig_img, mask_pil, color_rgb)
+            elif choice == "Transparent (PNG)":
+                final_img = compose_transparent(orig_img, mask_pil)
+            else:
+                color_rgb = {
+                    "black":(0,0,0),
+                    "white":(255,255,255),
+                    "blue":(0,0,255),
+                    "green":(0,255,0),
+                    "red":(255,0,0)
+                }[choice]
+                final_img = compose_solid_bg(orig_img, mask_pil, color_rgb)
 
-                buf = io.BytesIO()
-                final_img.save(buf, format="PNG")
-                buf.seek(0)
+            # Show final preview
+            # For RGBA images, st.image handles them correctly
+            st.markdown("**Result preview**")
+            st.image(final_img, width=420)
 
-                st.download_button(
-                    f"⬇ Download ({bg_option})",
-                    data=buf,
-                    file_name=f"cutout_{bg_option}.png",
-                    mime="image/png",
-                    use_container_width=True
-                )
+            # Prepare download
+            buf = io.BytesIO()
+            # always save as PNG to preserve transparency where applicable
+            final_img.save(buf, format="PNG")
+            buf.seek(0)
+
+            fn = "cutout.png"
+            if choice != "Custom color":
+                safe_choice = choice.replace(" ", "_").replace("(","").replace(")","")
+                fn = f"cutout_{safe_choice}.png"
+            else:
+                fn = f"cutout_custom_{custom_hex.lstrip('#')}.png"
+
+            st.download_button("⬇️ Download Result (PNG)", data=buf, file_name=fn, mime="image/png")
+
 else:
-    st.info("👆 Upload an image to get started!")
+    st.info("Upload an image to get started.")
